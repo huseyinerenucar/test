@@ -1,0 +1,17 @@
+export const engineeringFields = [
+  'Software Engineering',
+  'Computer Engineering',
+  'Electrical Engineering',
+  'Mechanical Engineering',
+  'Civil Engineering',
+  'Chemical Engineering',
+  'Industrial Engineering',
+  'Biomedical Engineering',
+  'Aerospace Engineering',
+  'Environmental Engineering',
+  'Materials Engineering',
+  'Electronics Engineering',
+  'Automotive Engineering',
+  'Robotics Engineering',
+  'Data Engineering',
+];
