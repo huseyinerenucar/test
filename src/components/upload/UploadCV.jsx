@@ -16,7 +16,7 @@ const initialForm = {
   'OSYM siralamasi': '',
 };
 
-export default function UploadCV({ onAddCandidate }) {
+export default function UploadCV({ onCandidateAdded }) {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const [form, setForm] = useState(initialForm);
@@ -65,24 +65,47 @@ export default function UploadCV({ onAddCandidate }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
-    const candidate = {
-      ...form,
-      skills: form.skills.split(',').map((s) => s.trim()).filter(Boolean),
-      cvAttached: !!cvFile,
-      cvFileName: cvFile?.name || null,
-      pdfUrl: null,
-      uploadDate: new Date().toISOString().split('T')[0],
-      status: cvFile ? 'New' : 'Pending CV',
-      'OSYM siralamasi': form['OSYM siralamasi'] ? Number(form['OSYM siralamasi']) : null,
-    };
+    const formData = new FormData();
+    formData.append('name', form.name);
+    formData.append('email', form.email);
+    formData.append('phone', form.phone);
+    formData.append('title', form.title);
+    formData.append('engineeringField', form.engineeringField);
+    formData.append('skills', form.skills);
+    formData.append('experience', form.experience);
+    formData.append('education', form.education);
+    formData.append('background', form.background);
+    if (form['OSYM siralamasi']) {
+      formData.append('osymRanking', form['OSYM siralamasi']);
+    }
+    if (cvFile) {
+      formData.append('cv', cvFile);
+    }
 
-    onAddCandidate(candidate);
-    setSubmitStatus('success');
-    setTimeout(() => navigate('/'), 1500);
+    try {
+      const res = await fetch('/api/candidates', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        setSubmitStatus('error');
+        setErrors({ submit: err.error || 'Failed to add candidate' });
+        return;
+      }
+
+      setSubmitStatus('success');
+      onCandidateAdded();
+      setTimeout(() => navigate('/'), 1500);
+    } catch {
+      setSubmitStatus('error');
+      setErrors({ submit: 'Network error. Is the server running?' });
+    }
   };
 
   const inputStyle = (field) => ({

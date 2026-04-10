@@ -1,14 +1,35 @@
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Phone, Briefcase, GraduationCap, Calendar,
-  FileText, Hash, Clock, User,
+  FileText, Hash, Clock, User, Loader,
 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 
-export default function CandidateDetail({ candidates }) {
+export default function CandidateDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const candidate = candidates.find((c) => c.id === Number(id));
+  const [candidate, setCandidate] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/candidates/${id}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Not found');
+        return res.json();
+      })
+      .then(setCandidate)
+      .catch(() => setCandidate(null))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader size={32} className="animate-spin" style={{ color: 'var(--accent-primary)' }} />
+      </div>
+    );
+  }
 
   if (!candidate) {
     return (

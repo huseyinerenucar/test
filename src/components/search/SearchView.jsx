@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Search, LayoutGrid, List, Filter, X, Users } from 'lucide-react';
+import { Search, LayoutGrid, List, Filter, X, Users, Loader } from 'lucide-react';
 import CandidateCard from '../candidates/CandidateCard';
 import CandidateTable from '../candidates/CandidateTable';
 import CandidateModal from '../candidates/CandidateModal';
 
 const statusOptions = ['All', 'New', 'Reviewed', 'Interview', 'Pending CV'];
 
-export default function SearchView({ candidates }) {
+export default function SearchView({ candidates, loading }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('grid');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -193,7 +193,11 @@ export default function SearchView({ candidates }) {
       )}
 
       {/* Results */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader size={32} className="animate-spin" style={{ color: 'var(--accent-primary)' }} />
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-16 animate-fade-in">
           <Users size={48} style={{ color: 'var(--text-secondary)', margin: '0 auto 16px' }} />
           <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
