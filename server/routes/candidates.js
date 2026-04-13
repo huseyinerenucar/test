@@ -6,7 +6,8 @@ import { fileURLToPath } from 'url';
 import db from '../db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadsDir = path.join(__dirname, '..', 'uploads');
+// Uploads live outside server/ so node --watch doesn't restart on writes
+const uploadsDir = path.join(__dirname, '..', '..', 'data', 'uploads');
 
 const router = Router();
 

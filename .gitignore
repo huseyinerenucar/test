@@ -12,12 +12,13 @@ dist
 dist-ssr
 *.local
 
-# Server data
+# Server data (database + uploaded CVs)
+data/
 server/uploads/
+server/hrdesk.json
 server/*.db
 server/*.db-shm
 server/*.db-wal
-server/hrdesk.json
 
 # Editor directories and files
 .vscode/*
