@@ -1,0 +1,9 @@
+{
+  "watch": ["server"],
+  "ext": "js",
+  "ignore": [
+    "server/hrdesk.json",
+    "server/uploads/**",
+    "node_modules"
+  ]
+}
