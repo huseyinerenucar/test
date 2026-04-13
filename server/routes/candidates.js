@@ -36,43 +36,29 @@ const upload = multer({
   },
 });
 
-// Helper to format a DB row into the API response shape
-function formatCandidate(row) {
-  return {
-    id: row.id,
-    name: row.name,
-    email: row.email,
-    phone: row.phone,
-    title: row.title,
-    engineeringField: row.engineering_field,
-    skills: JSON.parse(row.skills || '[]'),
-    experience: row.experience,
-    experienceYears: row.experience_years,
-    education: row.education,
-    background: row.background,
-    'OSYM siralamasi': row.osym_ranking,
-    cvAttached: Boolean(row.cv_attached),
-    cvFileName: row.cv_filename,
-    uploadDate: row.upload_date,
-    status: row.status,
-  };
+// Strip internal fields (like cvPath) from the API response
+function toPublic(candidate) {
+  const { cvPath: _cvPath, ...publicData } = candidate;
+  return publicData;
 }
 
-// GET /api/candidates — list all
-router.get('/', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM candidates ORDER BY id DESC').all();
-  res.json(rows.map(formatCandidate));
+// GET /api/candidates — list all (newest first)
+router.get('/', async (_req, res) => {
+  await db.read();
+  const sorted = [...db.data.candidates].sort((a, b) => b.id - a.id);
+  res.json(sorted.map(toPublic));
 });
 
 // GET /api/candidates/:id — single candidate
-router.get('/:id', (req, res) => {
-  const row = db.prepare('SELECT * FROM candidates WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Candidate not found' });
-  res.json(formatCandidate(row));
+router.get('/:id', async (req, res) => {
+  await db.read();
+  const candidate = db.data.candidates.find((c) => c.id === Number(req.params.id));
+  if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+  res.json(toPublic(candidate));
 });
 
-// POST /api/candidates — create new candidate (with optional CV upload)
-router.post('/', upload.single('cv'), (req, res) => {
+// POST /api/candidates — create new candidate (with optional CV)
+router.post('/', upload.single('cv'), async (req, res) => {
   const { name, email, phone, title, engineeringField, skills, experience, education, background } = req.body;
   const osymRanking = req.body.osymRanking ? Number(req.body.osymRanking) : null;
 
@@ -85,118 +71,123 @@ router.post('/', upload.single('cv'), (req, res) => {
   const experienceYears = yearMatch ? parseInt(yearMatch[1], 10) : 0;
 
   const parsedSkills = typeof skills === 'string'
-    ? JSON.stringify(skills.split(',').map(s => s.trim()).filter(Boolean))
-    : JSON.stringify([]);
+    ? skills.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
 
-  const cvAttached = req.file ? 1 : 0;
-  const cvFilename = req.file ? req.file.originalname : null;
-  const cvPath = req.file ? req.file.filename : null;
-  const uploadDate = new Date().toISOString().split('T')[0];
-  const status = cvAttached ? 'New' : 'Pending CV';
+  await db.read();
+  const candidate = {
+    id: db.data.nextId++,
+    name,
+    email,
+    phone: phone || '',
+    title,
+    engineeringField,
+    skills: parsedSkills,
+    experience: experience || '',
+    experienceYears,
+    education: education || '',
+    background: background || '',
+    'OSYM siralamasi': osymRanking,
+    cvAttached: Boolean(req.file),
+    cvFileName: req.file ? req.file.originalname : null,
+    cvPath: req.file ? req.file.filename : null,
+    uploadDate: new Date().toISOString().split('T')[0],
+    status: req.file ? 'New' : 'Pending CV',
+  };
 
-  const stmt = db.prepare(`
-    INSERT INTO candidates (name, email, phone, title, engineering_field, skills, experience, experience_years, education, background, osym_ranking, cv_attached, cv_filename, cv_path, upload_date, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const result = stmt.run(
-    name, email, phone || '', title, engineeringField,
-    parsedSkills, experience || '', experienceYears,
-    education || '', background || '', osymRanking,
-    cvAttached, cvFilename, cvPath, uploadDate, status
-  );
-
-  const newRow = db.prepare('SELECT * FROM candidates WHERE id = ?').get(result.lastInsertRowid);
-  res.status(201).json(formatCandidate(newRow));
+  db.data.candidates.push(candidate);
+  await db.write();
+  res.status(201).json(toPublic(candidate));
 });
 
 // PUT /api/candidates/:id — update candidate
-router.put('/:id', upload.single('cv'), (req, res) => {
-  const existing = db.prepare('SELECT * FROM candidates WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'Candidate not found' });
+router.put('/:id', upload.single('cv'), async (req, res) => {
+  await db.read();
+  const idx = db.data.candidates.findIndex((c) => c.id === Number(req.params.id));
+  if (idx === -1) return res.status(404).json({ error: 'Candidate not found' });
 
+  const existing = db.data.candidates[idx];
   const { name, email, phone, title, engineeringField, skills, experience, education, background, status } = req.body;
-  const osymRanking = req.body.osymRanking ? Number(req.body.osymRanking) : existing.osym_ranking;
+  const osymRanking = req.body.osymRanking !== undefined
+    ? (req.body.osymRanking ? Number(req.body.osymRanking) : null)
+    : existing['OSYM siralamasi'];
 
-  const yearMatch = (experience || existing.experience).match(/(\d+)\s*year/i);
-  const experienceYears = yearMatch ? parseInt(yearMatch[1], 10) : existing.experience_years;
+  const effectiveExperience = experience !== undefined ? experience : existing.experience;
+  const yearMatch = effectiveExperience.match(/(\d+)\s*year/i);
+  const experienceYears = yearMatch ? parseInt(yearMatch[1], 10) : existing.experienceYears;
 
   let parsedSkills = existing.skills;
   if (skills !== undefined) {
     parsedSkills = typeof skills === 'string'
-      ? JSON.stringify(skills.split(',').map(s => s.trim()).filter(Boolean))
+      ? skills.split(',').map((s) => s.trim()).filter(Boolean)
       : existing.skills;
   }
 
-  let cvAttached = existing.cv_attached;
-  let cvFilename = existing.cv_filename;
-  let cvPath = existing.cv_path;
+  let cvAttached = existing.cvAttached;
+  let cvFileName = existing.cvFileName;
+  let cvPath = existing.cvPath;
   if (req.file) {
-    // Remove old file if it exists
-    if (existing.cv_path) {
-      const oldPath = path.join(uploadsDir, existing.cv_path);
+    if (existing.cvPath) {
+      const oldPath = path.join(uploadsDir, existing.cvPath);
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
-    cvAttached = 1;
-    cvFilename = req.file.originalname;
+    cvAttached = true;
+    cvFileName = req.file.originalname;
     cvPath = req.file.filename;
   }
 
-  const stmt = db.prepare(`
-    UPDATE candidates SET
-      name = ?, email = ?, phone = ?, title = ?, engineering_field = ?,
-      skills = ?, experience = ?, experience_years = ?, education = ?,
-      background = ?, osym_ranking = ?, cv_attached = ?, cv_filename = ?,
-      cv_path = ?, status = ?, updated_at = datetime('now')
-    WHERE id = ?
-  `);
-
-  stmt.run(
-    name || existing.name,
-    email || existing.email,
-    phone !== undefined ? phone : existing.phone,
-    title || existing.title,
-    engineeringField || existing.engineering_field,
-    parsedSkills,
-    experience !== undefined ? experience : existing.experience,
+  const updated = {
+    ...existing,
+    name: name || existing.name,
+    email: email || existing.email,
+    phone: phone !== undefined ? phone : existing.phone,
+    title: title || existing.title,
+    engineeringField: engineeringField || existing.engineeringField,
+    skills: parsedSkills,
+    experience: effectiveExperience,
     experienceYears,
-    education !== undefined ? education : existing.education,
-    background !== undefined ? background : existing.background,
-    osymRanking,
-    cvAttached, cvFilename, cvPath,
-    status || existing.status,
-    req.params.id
-  );
+    education: education !== undefined ? education : existing.education,
+    background: background !== undefined ? background : existing.background,
+    'OSYM siralamasi': osymRanking,
+    cvAttached,
+    cvFileName,
+    cvPath,
+    status: status || existing.status,
+  };
 
-  const updated = db.prepare('SELECT * FROM candidates WHERE id = ?').get(req.params.id);
-  res.json(formatCandidate(updated));
+  db.data.candidates[idx] = updated;
+  await db.write();
+  res.json(toPublic(updated));
 });
 
 // DELETE /api/candidates/:id
-router.delete('/:id', (req, res) => {
-  const existing = db.prepare('SELECT * FROM candidates WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'Candidate not found' });
+router.delete('/:id', async (req, res) => {
+  await db.read();
+  const idx = db.data.candidates.findIndex((c) => c.id === Number(req.params.id));
+  if (idx === -1) return res.status(404).json({ error: 'Candidate not found' });
 
-  // Remove CV file if it exists
-  if (existing.cv_path) {
-    const filePath = path.join(uploadsDir, existing.cv_path);
+  const existing = db.data.candidates[idx];
+  if (existing.cvPath) {
+    const filePath = path.join(uploadsDir, existing.cvPath);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 
-  db.prepare('DELETE FROM candidates WHERE id = ?').run(req.params.id);
+  db.data.candidates.splice(idx, 1);
+  await db.write();
   res.json({ message: 'Candidate deleted' });
 });
 
 // GET /api/candidates/:id/cv — download CV
-router.get('/:id/cv', (req, res) => {
-  const row = db.prepare('SELECT * FROM candidates WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Candidate not found' });
-  if (!row.cv_path) return res.status(404).json({ error: 'No CV attached' });
+router.get('/:id/cv', async (req, res) => {
+  await db.read();
+  const candidate = db.data.candidates.find((c) => c.id === Number(req.params.id));
+  if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+  if (!candidate.cvPath) return res.status(404).json({ error: 'No CV attached' });
 
-  const filePath = path.join(uploadsDir, row.cv_path);
+  const filePath = path.join(uploadsDir, candidate.cvPath);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'CV file not found on disk' });
 
-  res.download(filePath, row.cv_filename || 'cv.pdf');
+  res.download(filePath, candidate.cvFileName || 'cv.pdf');
 });
 
 export default router;

@@ -17,6 +17,7 @@ server/uploads/
 server/*.db
 server/*.db-shm
 server/*.db-wal
+server/hrdesk.json
 
 # Editor directories and files
 .vscode/*
