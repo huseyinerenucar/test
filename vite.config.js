@@ -7,8 +7,13 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        // Use 127.0.0.1 explicitly to avoid IPv4/IPv6 resolution issues on Windows
+        // (localhost can resolve to ::1 while the server binds to 0.0.0.0)
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
+        // Disable timeout on large uploads
+        timeout: 0,
+        proxyTimeout: 0,
       },
     },
   },
