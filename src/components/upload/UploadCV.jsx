@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, FileText, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { engineeringFields } from '../../constants/engineeringFields';
+import { apiUrl } from '../../lib/api';
 
 const initialForm = {
   name: '',
@@ -87,7 +88,7 @@ export default function UploadCV({ onCandidateAdded }) {
     }
 
     try {
-      const res = await fetch('/api/candidates', {
+      const res = await fetch(apiUrl('/api/candidates'), {
         method: 'POST',
         body: formData,
       });

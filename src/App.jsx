@@ -4,6 +4,7 @@ import Header from './components/layout/Header';
 import SearchView from './components/search/SearchView';
 import UploadCV from './components/upload/UploadCV';
 import CandidateDetail from './components/candidates/CandidateDetail';
+import { apiUrl } from './lib/api';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -16,7 +17,7 @@ export default function App() {
 
   const fetchCandidates = useCallback(async () => {
     try {
-      const res = await fetch('/api/candidates');
+      const res = await fetch(apiUrl('/api/candidates'));
       if (res.ok) {
         const data = await res.json();
         setCandidates(data);

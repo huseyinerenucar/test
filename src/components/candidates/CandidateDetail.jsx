@@ -5,6 +5,7 @@ import {
   FileText, Hash, Clock, User, Loader,
 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
+import { apiUrl } from '../../lib/api';
 
 export default function CandidateDetail() {
   const { id } = useParams();
@@ -13,7 +14,7 @@ export default function CandidateDetail() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/candidates/${id}`)
+    fetch(apiUrl(`/api/candidates/${id}`))
       .then((res) => {
         if (!res.ok) throw new Error('Not found');
         return res.json();
