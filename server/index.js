@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -22,7 +21,22 @@ async function start() {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  app.use(cors());
+  // Explicit CORS middleware — the `cors` package appeared to drop its
+  // headers under Express v5 on some Windows setups, so we set them
+  // directly. The dev frontend (Vite on :5173) calls this server on
+  // :3001 cross-origin; in production the server serves the built assets
+  // and these headers are harmless.
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204;
+      return res.end();
+    }
+    next();
+  });
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
